@@ -53,7 +53,11 @@ impl WebhookClient {
         let retry_policy = ExponentialBackoff::builder()
             .retry_bounds(config.min_backoff, std::time::Duration::from_secs(300))
             .build_with_max_retries(config.retries as u32);
-        let client = ClientBuilder::new(reqwest::Client::new())
+        let raw_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("Failed to build reqwest client");
+        let client = ClientBuilder::new(raw_client)
             .with(reqwest_tracing::TracingMiddleware::default())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();

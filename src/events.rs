@@ -22,7 +22,7 @@ pub struct Event {
 #[serde(tag = "type")]
 enum EventPayload {
     #[serde(rename = "file.created")]
-    FileCreated { path: Utf8PathBuf },
+    FileCreated { path: Utf8PathBuf, size: u64 },
 }
 
 impl Event {
@@ -33,8 +33,8 @@ impl Event {
         }
     }
 
-    pub fn file_created(path: Utf8PathBuf) -> Self {
-        Self::new(EventPayload::FileCreated { path })
+    pub fn file_created(path: Utf8PathBuf, size: u64) -> Self {
+        Self::new(EventPayload::FileCreated { path, size })
     }
 
     #[cfg(test)]
@@ -50,11 +50,12 @@ mod tests {
 
     #[test]
     fn test_event_serialization() {
-        let event = Event::file_created(Utf8PathBuf::from("dir/file.txt"))
+        let event = Event::file_created(Utf8PathBuf::from("dir/file.txt"), 12345)
             .with_timestamp(SystemTime::UNIX_EPOCH);
         let serialized = serde_json::to_value(&event).unwrap();
         assert_eq!(serialized["type"], "file.created");
         assert_eq!(serialized["path"], "dir/file.txt");
+        assert_eq!(serialized["size"], 12345);
         assert_eq!(serialized["timestamp"], "1970-01-01T00:00:00Z");
     }
 }

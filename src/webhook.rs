@@ -194,7 +194,10 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Event::file_created(Utf8Path::new("test.txt").to_path_buf()));
+        client.send_notification(Event::file_created(
+            Utf8Path::new("test.txt").to_path_buf(),
+            0,
+        ));
 
         // Wait for webhook to finish
         tracker.close();
@@ -242,7 +245,10 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Event::file_created(Utf8Path::new("test.txt").to_path_buf()));
+        client.send_notification(Event::file_created(
+            Utf8Path::new("test.txt").to_path_buf(),
+            0,
+        ));
 
         tracker.close();
         let finished = tokio::select! {
@@ -278,7 +284,10 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Event::file_created(Utf8Path::new("test.txt").to_path_buf()));
+        client.send_notification(Event::file_created(
+            Utf8Path::new("test.txt").to_path_buf(),
+            0,
+        ));
 
         tracker.close();
         let finished = tokio::select! {

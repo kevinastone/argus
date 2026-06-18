@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
                     Ok(file) => {
                         tracing::info!(size = %humanize_bytes(file.size), "File created");
                         if let Some(client) = webhook_client.as_ref() {
-                            let event = Event::file_created(file.relative_path);
+                            let event = Event::file_created(file.relative_path, file.size);
                             client.send_notification(event);
                         }
                     }

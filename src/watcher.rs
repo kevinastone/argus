@@ -6,6 +6,13 @@ use notify::{Config, PollWatcher, RecursiveMode};
 use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
+async fn is_file(path: &std::path::Path) -> bool {
+    tokio::fs::metadata(path)
+        .await
+        .map(|m| m.is_file())
+        .unwrap_or(false)
+}
+
 /// A raw debounced directory watcher that yields relative paths of all created files.
 pub struct RawDirectoryWatcher {
     debouncer: notify_debouncer_full::Debouncer<PollWatcher, FileIdMap>,
@@ -48,7 +55,10 @@ impl RawDirectoryWatcher {
             .flat_map(futures::stream::iter)
             .filter(|e| future::ready(matches!(e.event.kind, notify::EventKind::Create(_))))
             .flat_map(|e| futures::stream::iter(e.event.paths))
-            .filter(|p| future::ready(p.is_file()))
+            .filter(|p| {
+                let p = p.clone();
+                async move { is_file(&p).await }.boxed()
+            })
             .filter_map(move |p| {
                 future::ready(Utf8PathBuf::from_path_buf(p).ok().and_then(|utf8_p| {
                     utf8_p

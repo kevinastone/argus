@@ -1,6 +1,6 @@
 [package]
 name = "lynceus"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2024"
 description = "lynceus is a file watcher that reports file changes using a webhook."
 repository = "https://github.com/kevinastone/lynceus"

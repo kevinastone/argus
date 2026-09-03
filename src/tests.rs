@@ -14,6 +14,7 @@ async fn test_run_e2e_file_creation_to_webhook() {
     let mock = server
         .mock("POST", "/webhook")
         .match_header("content-type", "application/json")
+        .match_header("authorization", "Bearer test-api-key")
         .match_body(mockito::Matcher::PartialJson(json!({
             "event_type": "file.created",
             "file": "sub/report.txt"
@@ -45,6 +46,10 @@ async fn test_run_e2e_file_creation_to_webhook() {
                 "time": "{{timestamp}}"
             }),
             webhook_retries: 2,
+            webhook_headers: vec![(
+                reqwest::header::HeaderName::from_static("authorization"),
+                reqwest::header::HeaderValue::from_static("Bearer test-api-key"),
+            )],
         },
     };
 

@@ -104,6 +104,8 @@ Options:
           Optional JSON template for the webhook payload. Supports `{{path}}`, `{{type}}`, and `{{timestamp}}` placeholders [env: LYNCEUS_WEBHOOK_TEMPLATE=] [default: {"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}]
       --webhook-retries <WEBHOOK_RETRIES>
           Number of retries when sending a webhook fails [env: LYNCEUS_WEBHOOK_RETRIES=] [default: 3]
+  -H, --webhook-header <WEBHOOK_HEADER>
+          Optional HTTP header(s) to include with the webhook request (e.g. "Authorization: Bearer <token>"). Can be specified multiple times [env: LYNCEUS_WEBHOOK_HEADER=]
   -i, --interval <INTERVAL>
           Polling interval (e.g. 2s, 500ms) [env: LYNCEUS_INTERVAL=] [default: 2s]
   -d, --debounce <DEBOUNCE>
@@ -154,6 +156,15 @@ Using the `--webhook-template` flag (or `LYNCEUS_WEBHOOK_TEMPLATE` env var), you
 ```bash
 cargo run --release -- /path/to/watch https://hooks.slack.com/services/... \
   --webhook-template '{"text": "New file created: {{path | split: '\''/'\'' | last}} at {{path}}"}'
+```
+
+#### Custom HTTP Headers
+Pass authentication or metadata headers using `-H` / `--webhook-header` (or `LYNCEUS_WEBHOOK_HEADER` env var). Can be specified multiple times:
+
+```bash
+cargo run --release -- /path/to/watch https://api.example.com/webhooks \
+  -H "Authorization: Bearer my-secret-token" \
+  -H "X-Source: lynceus"
 ```
 
 #### Transient Failure Retries

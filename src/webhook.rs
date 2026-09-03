@@ -12,6 +12,7 @@ pub struct WebhookClientConfig {
     pub template: serde_json::Value,
     pub retries: usize,
     pub min_backoff: std::time::Duration,
+    pub headers: reqwest::header::HeaderMap,
 }
 
 impl WebhookClientConfig {
@@ -26,15 +27,21 @@ impl Default for WebhookClientConfig {
             template: serde_json::from_str(Self::DEFAULT_TEMPLATE).unwrap(),
             retries: Self::DEFAULT_RETRIES,
             min_backoff: std::time::Duration::from_secs(10),
+            headers: reqwest::header::HeaderMap::new(),
         }
     }
 }
 
 impl From<&WebhookArgs> for WebhookClientConfig {
     fn from(args: &WebhookArgs) -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        for (name, val) in &args.webhook_headers {
+            headers.append(name.clone(), val.clone());
+        }
         Self {
             template: args.webhook_template.clone(),
             retries: args.webhook_retries,
+            headers,
             ..Self::default()
         }
     }
@@ -54,6 +61,7 @@ impl WebhookClient {
             .retry_bounds(config.min_backoff, std::time::Duration::from_secs(300))
             .build_with_max_retries(config.retries as u32);
         let raw_client = reqwest::Client::builder()
+            .default_headers(config.headers)
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("Failed to build reqwest client");
@@ -194,6 +202,7 @@ mod tests {
                 template: json!({"path": "{{path}}"}),
                 retries: 2,
                 min_backoff: std::time::Duration::from_millis(1),
+                ..Default::default()
             },
             tracker.clone(),
         );
@@ -245,6 +254,7 @@ mod tests {
                 template: json!({"path": "{{path}}"}),
                 retries: 1,
                 min_backoff: std::time::Duration::from_millis(1),
+                ..Default::default()
             },
             tracker.clone(),
         );
@@ -284,6 +294,7 @@ mod tests {
                 template: json!({"path": "{{path}}"}),
                 retries: 0,
                 min_backoff: std::time::Duration::from_millis(1),
+                ..Default::default()
             },
             tracker.clone(),
         );
@@ -304,16 +315,74 @@ mod tests {
         mock_fail.assert_async().await;
     }
 
+    #[tokio::test]
+    async fn test_webhook_with_custom_headers() {
+        let mut server = mockito::Server::new_async().await;
+
+        let mock = server
+            .mock("POST", "/")
+            .match_header("authorization", "Bearer test_token")
+            .match_header("x-custom-header", "custom_value")
+            .with_status(200)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::HeaderName::from_static("authorization"),
+            reqwest::header::HeaderValue::from_static("Bearer test_token"),
+        );
+        headers.insert(
+            reqwest::header::HeaderName::from_static("x-custom-header"),
+            reqwest::header::HeaderValue::from_static("custom_value"),
+        );
+
+        let tracker = TaskTracker::new();
+        let client = WebhookClient::new(
+            server.url(),
+            WebhookClientConfig {
+                template: json!({"path": "{{path}}"}),
+                retries: 1,
+                min_backoff: std::time::Duration::from_millis(1),
+                headers,
+            },
+            tracker.clone(),
+        );
+
+        client.send_notification(Event::file_created(
+            Utf8Path::new("test.txt").to_path_buf(),
+            0,
+        ));
+
+        tracker.close();
+        let finished = tokio::select! {
+            _ = tracker.wait() => true,
+            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => false,
+        };
+
+        assert!(finished, "Webhook notification took too long to complete");
+        mock.assert_async().await;
+    }
+
     #[test]
     fn test_webhook_client_config_from_webhook_args() {
         let args = WebhookArgs {
             webhook_url: Some("http://example.com".to_string()),
             webhook_template: json!({"my_path": "{{path}}"}),
             webhook_retries: 5,
+            webhook_headers: vec![(
+                reqwest::header::HeaderName::from_static("authorization"),
+                reqwest::header::HeaderValue::from_static("Bearer token123"),
+            )],
         };
         let config = WebhookClientConfig::from(&args);
         assert_eq!(config.template, json!({"my_path": "{{path}}"}));
         assert_eq!(config.retries, 5);
         assert_eq!(config.min_backoff, std::time::Duration::from_secs(10));
+        assert_eq!(
+            config.headers.get("authorization").unwrap(),
+            "Bearer token123"
+        );
     }
 }

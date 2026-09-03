@@ -115,12 +115,11 @@ async fn test_run_e2e_ignored_files_do_not_notify() {
         stabilizer: StabilizerArgs {
             cooldown: humantime::Duration::from(Duration::from_millis(15)),
             stable_count: NonZeroUsize::new(2).unwrap(),
-            error_count: NonZeroUsize::new(3).unwrap(),
+            ..Default::default()
         },
         webhook: WebhookArgs {
             webhook_url: Some(format!("{}/webhook", server.url())),
-            webhook_template: json!({"path": "{{path}}"}),
-            webhook_retries: 1,
+            ..Default::default()
         },
     };
 

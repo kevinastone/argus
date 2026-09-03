@@ -4,7 +4,7 @@ use camino::Utf8PathBuf;
 use clap::{Args as ClapArgs, Parser};
 use std::time::Duration;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     #[clap(flatten)]
@@ -152,6 +152,37 @@ impl std::fmt::Display for Args {
     }
 }
 
+impl Default for WatcherArgs {
+    fn default() -> Self {
+        Self {
+            path: Utf8PathBuf::new(),
+            pattern: None,
+            interval: humantime::Duration::from(Duration::from_secs(2)),
+            debounce: humantime::Duration::from(Duration::from_secs(5)),
+        }
+    }
+}
+
+impl Default for StabilizerArgs {
+    fn default() -> Self {
+        Self {
+            cooldown: humantime::Duration::from(StabilityConfig::default().cooldown),
+            stable_count: StabilityConfig::DEFAULT_STABLE_LIMIT,
+            error_count: StabilityConfig::DEFAULT_ERROR_LIMIT,
+        }
+    }
+}
+
+impl Default for WebhookArgs {
+    fn default() -> Self {
+        Self {
+            webhook_url: None,
+            webhook_template: serde_json::from_str(WebhookClientConfig::DEFAULT_TEMPLATE).unwrap(),
+            webhook_retries: WebhookClientConfig::DEFAULT_RETRIES,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,18 +193,16 @@ mod tests {
             watcher: WatcherArgs {
                 path: Utf8PathBuf::from("/tmp"),
                 pattern: Some("**/*.rs".to_string()),
-                interval: humantime::Duration::from(std::time::Duration::from_secs(2)),
-                debounce: humantime::Duration::from(std::time::Duration::from_secs(5)),
+                ..Default::default()
             },
             stabilizer: StabilizerArgs {
                 cooldown: humantime::Duration::from(std::time::Duration::from_secs(10)),
-                stable_count: std::num::NonZeroUsize::new(3).unwrap(),
-                error_count: std::num::NonZeroUsize::new(5).unwrap(),
+                ..Default::default()
             },
             webhook: WebhookArgs {
                 webhook_url: Some("http://localhost".to_string()),
                 webhook_template: serde_json::json!({"path": "{{path}}"}),
-                webhook_retries: 3,
+                ..Default::default()
             },
         };
 
@@ -182,5 +211,19 @@ mod tests {
             formatted,
             "watcher={path=\"/tmp\" interval=2s debounce=5s pattern=\"**/*.rs\"} stabilizer={cooldown=10s stable_count=3 error_count=5} webhook={url=\"http://localhost\" retries=3 template={\"path\":\"{{path}}\"}}"
         );
+    }
+
+    #[test]
+    fn test_args_default() {
+        let args = Args::default();
+        assert_eq!(args.watcher.path, "");
+        assert_eq!(args.watcher.pattern, None);
+        assert_eq!(args.watcher.interval.as_secs(), 2);
+        assert_eq!(args.watcher.debounce.as_secs(), 5);
+        assert_eq!(args.stabilizer.cooldown.as_secs(), 10);
+        assert_eq!(args.stabilizer.stable_count.get(), 3);
+        assert_eq!(args.stabilizer.error_count.get(), 5);
+        assert_eq!(args.webhook.webhook_url, None);
+        assert_eq!(args.webhook.webhook_retries, 3);
     }
 }

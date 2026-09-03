@@ -17,17 +17,10 @@ use events::Event;
 mod webhook;
 use webhook::{WebhookClient, WebhookClientConfig};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Initialize tracing subscriber with level info by default
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+#[cfg(test)]
+mod tests;
 
-    let args = Args::parse();
+pub async fn run(args: Args, shutdown: impl Future<Output = ()>) -> anyhow::Result<()> {
     tracing::info!(%args, "Starting Lynceus");
 
     let watch_path =
@@ -89,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
         _ = stream_future => {
             tracing::error!("Event stream terminated unexpectedly");
         }
-        _ = shutdown_signal() => {}
+        _ = shutdown => {}
     }
 
     // Stop watching and drop the watcher immediately before draining webhooks
@@ -107,6 +100,20 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Initialize tracing subscriber with level info by default
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
+    let args = Args::parse();
+    run(args, shutdown_signal()).await
 }
 
 async fn shutdown_signal() {

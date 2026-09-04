@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3](https://github.com/kevinastone/lynceus/compare/v0.5.2...v0.5.3) - 2026-09-04
+
+### Added
+
+- *(webhook)* add custom webhook header support
+
+### Other
+
+- *(args)* implement Default for Args structures
+- add decoupled in-process e2e integration tests
+
 ## [0.5.2](https://github.com/kevinastone/lynceus/compare/v0.5.1...v0.5.2) - 2026-06-18
 
 ### Other

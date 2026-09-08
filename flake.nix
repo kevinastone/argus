@@ -103,9 +103,9 @@
             targetPkgs = getTargetPkgs targetSystem;
           in
           with targetPkgs;
-          dockerTools.buildImage {
+          dockerTools.buildLayeredImage {
             name = cargoToml.package.name;
-            copyToRoot = with dockerTools; [
+            contents = with dockerTools; [
               caCertificates
               fakeNss
             ];
@@ -116,6 +116,13 @@
               "org.opencontainers.image.description" = package.description or "";
             };
           };
+
+        crossTargets = {
+          amd64 = "x86_64-unknown-linux-musl";
+          arm64 = "aarch64-unknown-linux-musl";
+          amd64-glibc = "x86_64-linux";
+          arm64-glibc = "aarch64-linux";
+        };
 
         push-multiarch = pkgs.writeShellApplication {
           name = "push-multiarch";
@@ -139,21 +146,23 @@
               exit 1
             fi
 
+            TMP_DIR=$(mktemp -d)
+            trap 'rm -rf "$TMP_DIR"' EXIT
 
             # Import images into local OCI layout directories directly from Nix build outputs
-            regctl image import ocidir://./local-oci-amd64 "$AMD64_IMAGE"
-            regctl image import ocidir://./local-oci-arm64 "$ARM64_IMAGE"
+            regctl image import "ocidir://$TMP_DIR/amd64" "$AMD64_IMAGE"
+            regctl image import "ocidir://$TMP_DIR/arm64" "$ARM64_IMAGE"
 
             # Get the digests of the imported OCI layouts
-            AMD64_DIGEST=$(regctl image digest ocidir://./local-oci-amd64)
-            ARM64_DIGEST=$(regctl image digest ocidir://./local-oci-arm64)
+            AMD64_DIGEST=$(regctl image digest "ocidir://$TMP_DIR/amd64")
+            ARM64_DIGEST=$(regctl image digest "ocidir://$TMP_DIR/arm64")
 
             # Push single-architecture layers and manifests by digest
             echo "Pushing AMD64 digest: $AMD64_DIGEST to $REPO..."
-            regctl image copy ocidir://./local-oci-amd64 "$REPO@$AMD64_DIGEST"
+            regctl image copy "ocidir://$TMP_DIR/amd64" "$REPO@$AMD64_DIGEST"
 
             echo "Pushing ARM64 digest: $ARM64_DIGEST to $REPO..."
-            regctl image copy ocidir://./local-oci-arm64 "$REPO@$ARM64_DIGEST"
+            regctl image copy "ocidir://$TMP_DIR/arm64" "$REPO@$ARM64_DIGEST"
 
             # Create and push the multi-architecture manifest index for each tag
             # Since TAGS is multiline, we read it line by line
@@ -167,23 +176,21 @@
                   --platform linux/arm64
               fi
             done
-
-            # Cleanup local OCI layouts
-            rm -rf ./local-oci-amd64 ./local-oci-arm64
           '';
         };
+
+        crossBins = pkgs.lib.mapAttrs' (
+          name: target: pkgs.lib.nameValuePair "bin-${name}" (makeBinary target)
+        ) crossTargets;
+
+        crossImages = pkgs.lib.mapAttrs' (
+          name: _: pkgs.lib.nameValuePair "image-${name}" (makeImage crossBins."bin-${name}")
+        ) crossTargets;
       in
       rec {
         packages = rec {
           bin = makeBinary system;
           default = bin;
-
-          build = craneLib.cargoBuild (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-            }
-          );
 
           clippy = craneLib.cargoClippy (
             commonArgs
@@ -201,22 +208,16 @@
             }
           );
 
-          bin-amd64 = makeBinary "x86_64-unknown-linux-musl";
-          bin-arm64 = makeBinary "aarch64-unknown-linux-musl";
-          bin-amd64-glibc = makeBinary "x86_64-linux";
-          bin-arm64-glibc = makeBinary "aarch64-linux";
-
           image = makeImage bin;
-          image-amd64 = makeImage bin-amd64;
-          image-arm64 = makeImage bin-arm64;
-          image-amd64-glibc = makeImage bin-amd64-glibc;
-          image-arm64-glibc = makeImage bin-arm64-glibc;
 
           inherit push-multiarch;
-        };
+        }
+        // crossBins
+        // crossImages;
 
         checks = {
-          inherit (packages) build clippy test;
+          build = packages.bin;
+          inherit (packages) clippy test;
           formatting = treefmtStack.config.build.check self;
         };
 
@@ -231,14 +232,7 @@
               git-cliff
             ];
 
-            # Extract the Rust standard library source dynamically from craneLib's toolchain
-            RUST_SRC_PATH = craneLib.callPackage (
-              { rustc, rustPlatform }:
-              if builtins.pathExists "${rustc}/lib/rustlib/src/rust/library" then
-                "${rustc}/lib/rustlib/src/rust/library"
-              else
-                rustPlatform.rustLibSrc
-            ) { };
+            RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
           };
       }
     );
